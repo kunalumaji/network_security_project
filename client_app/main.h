@@ -28,3 +28,5 @@ int send_certificate(long long socket_descriptor, int packet_identifier);
 int receive_certificate(long long socket_descriptor, int packet_identifier, char* username);
 
 void* start_application(void* arg);
+
+void dns_lookup(char* username, char* hostname);

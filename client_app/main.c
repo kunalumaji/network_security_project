@@ -165,6 +165,14 @@ struct socket_context {
 };
 
 
+void dns_lookup(char* username, char* hostname) {
+
+    char* IP = "127.0.0.1";
+    memcpy(hostname, IP, strlen(IP));
+    hostname[strlen(IP)] = '\0';
+
+}
+
 void extract_username(FILE* certificate_file, char* username) {
 
     printf("Extracting username\n");
@@ -242,256 +250,14 @@ int receive_certificate(long long socket_descriptor, int packet_identifier, char
 
     fclose(temp_crt_file);
 
-    char certificate_username[MAX_USERNAME_LEN];
-
-    extract_username(temp_crt_file, certificate_username);
-
-    if (strcmp(certificate_username, username) == 0) {
-        return 1;
-    }
-    //end lock here
-
-    return 0;
-}
-
-
-// void* start_application(void* arg) {
-//
-//     const unsigned long long socket_descriptor = *(unsigned long long*)arg;
-//
-//     printf("[+] \n----\nApplication started\n----\n");
-//
-//     while (1) {
-//
-//         char username[MAX_USERNAME_LEN+1];
-//         printf("Select user to chat: ");
-//         fgets(username, MAX_USERNAME_LEN+1, stdin);
-//
-//         username[strlen(username)-1] = '\0';
-//
-//         if (strcmp(username, "exit") == 0) {
-//             closesocket(socket_descriptor);
-//             break;
-//         }
-//
-//         struct sockaddr_in user_address;
-//         user_address.sin_family = AF_INET;
-//         user_address.sin_addr.s_addr = inet_addr(username);
-//         user_address.sin_port = htons(9999);
-//
-//         if (connect(socket_descriptor, (struct sockaddr*)&user_address, sizeof(user_address)) < 0) {
-//             printf("[-] failed to connect to the server\n");
-//             continue;
-//         }
-//
-//         send_certificate(socket_descriptor, 1);
-//         int receive_status = receive_certificate(socket_descriptor, 1, username);
-//
-//         char chat_file_path[MAX_FILE_PATH] = "./chats/";
-//         strcat(chat_file_path, username);
-//         strcat(chat_file_path, ".txt");
-//
-//         char cert_file_path[MAX_FILE_PATH] = "./cache_certs/";
-//         strcat(cert_file_path, username);
-//         strcat(cert_file_path, ".crt");
-//
-//         if (verify_cert(cert_file_path) <= 0) {
-//             printf("[-] certificate verification failed\n");
-//             return NULL;
-//         }
-//
-//         printf("%s\n", chat_file_path);
-//
-//         while (1) {
-//
-//             FILE* open_chat_file = fopen(chat_file_path, "ab");
-//
-//             int packet_identifier = 2;
-//             printf(">>>");
-//
-//             char message[BUFFER_SIZE], send_buffer[BUFFER_SIZE];
-//
-//             fgets(message, BUFFER_SIZE, stdin);
-//
-//             int payload_size = strlen(message)-1;
-//
-//             if (strcmp(message, "exit") == 0) {
-//                 closesocket(socket_descriptor);
-//                 break;
-//             }
-//
-//             fwrite("\t\t", 1, 2, open_chat_file);
-//             fwrite(message, 1, payload_size, open_chat_file);
-//
-//             fclose(open_chat_file);
-//
-//             memcpy(send_buffer, &packet_identifier, sizeof(packet_identifier));
-//             memcpy(send_buffer + sizeof(packet_identifier), &payload_size, sizeof(payload_size));
-//             memcpy(send_buffer + 2*sizeof(packet_identifier), message, payload_size); //need to be changed payload_size to read_bytes
-//
-//             send(socket_descriptor, send_buffer, payload_size + 2*sizeof(payload_size), 0);
-//
-//         }
-//     }
-//
-//
-//     return NULL;
-// }
-
-
-// void* receive_execute_send(void* arg) {
-//
-//     const unsigned long long socket_descriptor = *(unsigned long long*)arg;
-//
-//     int read_bytes, packet_identifier, payload_size;
-//
-//     char receive_buffer[BUFFER_SIZE], send_buffer[BUFFER_SIZE];
-//
-//     read_bytes = recv(socket_descriptor, receive_buffer, BUFFER_SIZE, 0);
-//     memcpy(&packet_identifier, receive_buffer, sizeof(packet_identifier));
-//     memcpy(&payload_size, receive_buffer + sizeof(packet_identifier), sizeof(payload_size));
-//
-//     if (packet_identifier == 1) {
-//         printf("[+] certificate received\n");
-//
-//         FILE* temp_crt_file = fopen("./cache_certs/received.crt", "wb");
-//
-//         fwrite(receive_buffer + 2*sizeof(packet_identifier), 1, read_bytes - 2*sizeof(packet_identifier), temp_crt_file);
-//
-//         payload_size = payload_size - read_bytes - 2*sizeof(packet_identifier);
-//         while (payload_size > 0) {
-//             read_bytes = recv(socket_descriptor, receive_buffer, BUFFER_SIZE, 0);
-//             fwrite(receive_buffer, 1, read_bytes, temp_crt_file);
-//
-//             payload_size -= read_bytes;
-//         }
-//
-//         fclose(temp_crt_file);
-//
-//
-//         int ack_status = 1;
-//
-//         memcpy(send_buffer, &ack_status, sizeof(ack_status));
-//
-//         if (ack_status) {
-//
-//             FILE* my_cert = fopen("./trust_store/me.crt", "rb");
-//
-//             fseek(my_cert, 0, SEEK_END);
-//             int payload_size = ftell(my_cert);
-//             fseek(my_cert, 0, SEEK_SET);
-//
-//             memcpy(send_buffer + sizeof(packet_identifier), &payload_size, sizeof(payload_size));
-//             read_bytes = fread(send_buffer + 2*sizeof(ack_status), 1, BUFFER_SIZE - 2*sizeof(ack_status), my_cert);
-//
-//             send(socket_descriptor, send_buffer, read_bytes + 2*sizeof(ack_status), 0);
-//
-//             while ((read_bytes = fread(send_buffer, 1, BUFFER_SIZE, my_cert)) > 0) {
-//
-//                 send(socket_descriptor, send_buffer, read_bytes, 0);
-//             }
-//
-//             fclose(my_cert);
-//
-//         }
-//         else
-//             send(socket_descriptor, send_buffer, sizeof(ack_status), 0);
-//
-//     }
-//     else if (packet_identifier == 2) {
-//         printf("[+] reserved packet for some other functionality\n");
-//
-//         int ack_status = 2;
-//         memcpy(send_buffer, &ack_status, sizeof(int));
-//         send(socket_descriptor, send_buffer, sizeof(int), 0);
-//     }
-//     else {
-//         printf("[-] invalid request received\n");
-//     }
-//
-//     closesocket(socket_descriptor);
-//
-//     return NULL;
-// }
-
-
-// void* listen_incoming_connections(void* arg) {
-//
-//     long long socket_descriptor = *(long long*)arg;
-//
-//     struct sockaddr_in server_address;
-//     server_address.sin_family = AF_INET;
-//     server_address.sin_port = htons(DEFAULT_USER_PORT);
-//     server_address.sin_addr.s_addr = INADDR_ANY;
-//
-//     int address_length = sizeof(server_address);
-//
-//     if (bind(socket_descriptor, (struct sockaddr*)&server_address, address_length) == SOCKET_ERROR) {
-//         printf("[-] socket binding failed\n");
-//     }
-//
-//     if (listen(socket_descriptor, 10) < 0) {
-//         printf("[-] CA [%s]: failed to listen\n", inet_ntoa(server_address.sin_addr));
-//         return NULL;
-//     }
-//
-//     printf("[+] Client [%s:%d]: listening for request...\n", inet_ntoa(server_address.sin_addr), server_address.sin_port);
-//
-//     while (1) {
-//
-//         const unsigned long long accepting_socket = accept(socket_descriptor, (struct sockaddr*)&server_address, &address_length);
-//
-//         if (accepting_socket == INVALID_SOCKET) {
-//             printf("[-] connection not accepted\n");
-//             continue;
-//         }
-//
-//         printf("[+] connection accepted [%s]\n", inet_ntoa(server_address.sin_addr));
-//
-//         pthread_t accepted_thread;
-//         pthread_create(&accepted_thread, NULL, receive_execute_send, (void*)&accepting_socket);
-//         pthread_detach(accepted_thread);
-//
-//     }
-//
-//     return NULL;
-// }
-
-
-void* listen_incoming_connections(void* arg);
-
-int main() {
-
-    // generate_csr("kunalumaji");
-
-    // get_cert("kunalumaji", "127.0.0.1");
+    // char certificate_username[MAX_USERNAME_LEN];
     //
-    // if (verify_cert("./trust_store/me.crt")) {
-    //     printf("verified certificate\n");
+    // extract_username(temp_crt_file, certificate_username);
+    //
+    // if (strcmp(certificate_username, username) == 0) {
+    //     return 1;
     // }
-    // else
-    //     printf("invalid certificate");
-
-    WSADATA wsaData;
-
-    if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
-        printf("WSAStartup failed\n");
-        return -1;
-    }
-
-    const unsigned long long socket_descriptor = socket(AF_INET, SOCK_STREAM, 0);
-
-    if (socket_descriptor == INVALID_SOCKET) {
-        printf(" failed\n");
-    }
-
-    pthread_t listening_thread, application_thread;
-
-    pthread_create(&listening_thread, NULL, listen_incoming_connections, (void*)&socket_descriptor);
-    pthread_create(&application_thread, NULL, start_application, (void*)&socket_descriptor);
-
-    pthread_join(listening_thread, NULL);
-    pthread_join(application_thread, NULL);
+    //end lock here
 
     return 0;
 }

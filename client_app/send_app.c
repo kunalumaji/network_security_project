@@ -8,7 +8,7 @@ void* start_application(void* arg) {
 
     while (1) {
 
-        char username[MAX_USERNAME_LEN+1];
+        char username[MAX_USERNAME_LEN+1]; char hostname[16];
         printf("Select user to chat: ");
         fgets(username, MAX_USERNAME_LEN+1, stdin);
 
@@ -19,13 +19,16 @@ void* start_application(void* arg) {
             break;
         }
 
+
+        dns_lookup(username, hostname);
+
         struct sockaddr_in user_address;
         user_address.sin_family = AF_INET;
-        user_address.sin_addr.s_addr = inet_addr(username);
-        user_address.sin_port = htons(9999);
+        user_address.sin_addr.s_addr = inet_addr(hostname);
+        user_address.sin_port = htons(8585);
 
         if (connect(socket_descriptor, (struct sockaddr*)&user_address, sizeof(user_address)) < 0) {
-            printf("[-] failed to connect to the server\n");
+            printf("[-] failed to connect to the server [%s:%d]\n", inet_ntoa(user_address.sin_addr), ntohs(user_address.sin_port));
             continue;
         }
 
@@ -59,9 +62,9 @@ void* start_application(void* arg) {
 
             fgets(message, BUFFER_SIZE, stdin);
 
-            int payload_size = strlen(message)-1;
+            int payload_size = strlen(message);
 
-            if (strcmp(message, "exit") == 0) {
+            if (strcmp(message, "exit\n") == 0) {
                 closesocket(socket_descriptor);
                 break;
             }
@@ -82,4 +85,29 @@ void* start_application(void* arg) {
 
 
     return NULL;
+}
+
+
+int main() {
+
+    WSADATA wsaData;
+
+    if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
+        printf("WSAStartup failed\n");
+        return -1;
+    }
+
+    const unsigned long long socket_descriptor = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (socket_descriptor == INVALID_SOCKET) {
+        printf(" failed\n");
+    }
+
+    pthread_t application_thread;
+
+    pthread_create(&application_thread, NULL, start_application, (void*)&socket_descriptor);
+
+    pthread_join(application_thread, NULL);
+
+    return 0;
 }

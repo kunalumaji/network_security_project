@@ -133,18 +133,18 @@ void* listen_incoming_connections(void* arg) {
         return NULL;
     }
 
-    // printf("[+] Client [%s:%d]: listening for request...\n", inet_ntoa(server_address.sin_addr), server_address.sin_port);
+    printf("[+] Client [%s:%d]: listening for request...\n", inet_ntoa(server_address.sin_addr), ntohs(server_address.sin_port));
 
     while (1) {
 
         const unsigned long long accepting_socket = accept(socket_descriptor, (struct sockaddr*)&server_address, &address_length);
 
         if (accepting_socket == INVALID_SOCKET) {
-            // printf("[-] connection not accepted\n");
+            printf("[-] connection not accepted\n");
             continue;
         }
 
-        // printf("[+] connection accepted [%s]\n", inet_ntoa(server_address.sin_addr));
+        printf("[+] connection accepted [%s]\n", inet_ntoa(server_address.sin_addr));
 
         pthread_t accepted_thread;
         pthread_create(&accepted_thread, NULL, receive_execute_send, (void*)&accepting_socket);
@@ -156,25 +156,25 @@ void* listen_incoming_connections(void* arg) {
 }
 
 
-// int main() {
-//     WSADATA wsaData;
-//
-//     if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
-//         printf("WSAStartup failed\n");
-//         return -1;
-//     }
-//
-//     const unsigned long long socket_descriptor = socket(AF_INET, SOCK_STREAM, 0);
-//
-//     if (socket_descriptor == INVALID_SOCKET) {
-//         printf(" failed\n");
-//     }
-//
-//     pthread_t listening_thread, application_thread;
-//
-//     pthread_create(&listening_thread, NULL, listen_incoming_connections, (void*)&socket_descriptor);
-//
-//     pthread_join(listening_thread, NULL);
-//
-//     return 0;
-// }
+int main() {
+    WSADATA wsaData;
+
+    if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
+        printf("WSAStartup failed\n");
+        return -1;
+    }
+
+    const unsigned long long socket_descriptor = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (socket_descriptor == INVALID_SOCKET) {
+        printf(" failed\n");
+    }
+
+    pthread_t listening_thread;
+
+    pthread_create(&listening_thread, NULL, listen_incoming_connections, (void*)&socket_descriptor);
+
+    pthread_join(listening_thread, NULL);
+
+    return 0;
+}
