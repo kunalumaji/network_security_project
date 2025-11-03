@@ -26,3 +26,5 @@ void extract_username(FILE* certificate_file, char* username);
 
 int send_certificate(long long socket_descriptor, int packet_identifier);
 int receive_certificate(long long socket_descriptor, int packet_identifier, char* username);
+
+void* start_application(void* arg);

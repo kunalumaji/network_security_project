@@ -22,7 +22,7 @@ void* start_application(void* arg) {
         struct sockaddr_in user_address;
         user_address.sin_family = AF_INET;
         user_address.sin_addr.s_addr = inet_addr(username);
-        user_address.sin_port = htons(DEFAULT_USER_PORT);
+        user_address.sin_port = htons(9999);
 
         if (connect(socket_descriptor, (struct sockaddr*)&user_address, sizeof(user_address)) < 0) {
             printf("[-] failed to connect to the server\n");
