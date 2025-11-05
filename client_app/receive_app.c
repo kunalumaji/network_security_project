@@ -9,16 +9,19 @@ void* receive_execute_send(void* arg) {
 
     char receive_buffer[BUFFER_SIZE], send_buffer[BUFFER_SIZE];
 
+    char username[MAX_USERNAME_LEN];
+
+    int handshake_successful = 0;
+    int session_key_exchanged = 0;
     while (1) {
 
         read_bytes = recv(socket_descriptor, receive_buffer, BUFFER_SIZE, 0);
         memcpy(&packet_identifier, receive_buffer, sizeof(packet_identifier));
         memcpy(&payload_size, receive_buffer + sizeof(packet_identifier), sizeof(payload_size));
 
-        char username[MAX_USERNAME_LEN];
 
         if (packet_identifier == 1) {
-            // printf("[+] certificate received\n");
+            printf("[+] certificate received\n");
 
             //apply lock here
 
@@ -45,36 +48,10 @@ void* receive_execute_send(void* arg) {
             remove(crt_file_path);
             rename("./cache_certs/received.crt", crt_file_path);
 
+            handshake_successful = 1;
             //end lock here
 
-            send_certificate(socket_descriptor, 1);
-            // int ack_status = 1;
-            //
-            // memcpy(send_buffer, &ack_status, sizeof(ack_status));
-            //
-            // if (ack_status) {
-            //
-            //     FILE* my_cert = fopen("./trust_store/me.crt", "rb");
-            //
-            //     fseek(my_cert, 0, SEEK_END);
-            //     payload_size = ftell(my_cert);
-            //     fseek(my_cert, 0, SEEK_SET);
-            //
-            //     memcpy(send_buffer + sizeof(packet_identifier), &payload_size, sizeof(payload_size));
-            //     read_bytes = fread(send_buffer + 2*sizeof(ack_status), 1, BUFFER_SIZE - 2*sizeof(ack_status), my_cert);
-            //
-            //     send(socket_descriptor, send_buffer, read_bytes + 2*sizeof(ack_status), 0);
-            //
-            //     while ((read_bytes = fread(send_buffer, 1, BUFFER_SIZE, my_cert)) > 0) {
-            //
-            //         send(socket_descriptor, send_buffer, read_bytes, 0);
-            //     }
-            //
-            //     fclose(my_cert);
-            //
-            // }
-            // else
-            //     send(socket_descriptor, send_buffer, sizeof(ack_status), 0);
+            send_certificate(socket_descriptor, 1, MY_CERT_PATH);
 
         }
         else if (packet_identifier == 2) {
@@ -84,9 +61,54 @@ void* receive_execute_send(void* arg) {
             strcat(chat_file_path, username);
             strcat(chat_file_path, ".txt");
 
+            char session_key_path[MAX_FILE_PATH] = "./trust_store/session_";
+            strcat(session_key_path, username);
+            strcat(session_key_path, ".txt");
+
+            size_t decrypted_session_key_len = 0;
+            unsigned char encrypted_session_key[256];
+            long long generated_on;
+
+            FILE* session_key_file = fopen(session_key_path, "rb");
+            fread(encrypted_session_key, 1, 256, session_key_file);
+            fseek(session_key_file, 257, SEEK_SET);
+            fscanf(session_key_file, "%lld", &generated_on);
+
+            FILE* secret_file = fopen("./credentials/secret.pem", "rb");
+            EVP_PKEY* private_key = PEM_read_PrivateKey(secret_file, NULL, NULL, NULL);
+
+            EVP_PKEY_CTX* context = EVP_PKEY_CTX_new(private_key, NULL);
+            EVP_PKEY_decrypt_init(context);
+            EVP_PKEY_CTX_set_rsa_padding(context, RSA_PKCS1_OAEP_PADDING);
+
+            EVP_PKEY_decrypt(context, NULL, &decrypted_session_key_len, encrypted_session_key, sizeof(encrypted_session_key));
+
+            unsigned char* plaintext = malloc(decrypted_session_key_len);
+
+            EVP_PKEY_decrypt(context, plaintext, &decrypted_session_key_len, encrypted_session_key, sizeof(encrypted_session_key));
+
+            printf("Session key ");
+            for (int index = 0; index < decrypted_session_key_len; index++) {
+                printf("%c", plaintext[index]);
+            }
+            printf(" & Generated on %lld \n", generated_on);
             //apply lock here
 
             FILE* open_chat_file = fopen(chat_file_path, "ab");
+
+            if (handshake_successful) {
+                fprintf(open_chat_file, "\n[+] certificate handshake\n");
+                handshake_successful = 0;
+            }
+            if (session_key_exchanged) {
+                fprintf(open_chat_file, "[+] session key: ");
+                for (int index = 0; index < decrypted_session_key_len; index++) {
+                    fprintf(open_chat_file, "%.02x", plaintext[index]);
+                }
+                fprintf(open_chat_file, "\n");
+
+                session_key_exchanged = 0;
+            }
 
             fwrite(receive_buffer + 2*sizeof(packet_identifier), 1, read_bytes - 2*sizeof(packet_identifier), open_chat_file);
 
@@ -99,6 +121,28 @@ void* receive_execute_send(void* arg) {
             }
 
             fclose(open_chat_file);
+        }
+        else if (packet_identifier == 3) {
+
+            char session_key_path[MAX_FILE_PATH] = "./trust_store/session_";
+            strcat(session_key_path, username);
+            strcat(session_key_path, ".txt");
+
+            FILE* session_key_file = fopen(session_key_path, "wb");
+
+            fwrite(receive_buffer + 2*sizeof(packet_identifier), 1, read_bytes - 2*sizeof(packet_identifier), session_key_file);
+
+            payload_size = payload_size - read_bytes - 2*sizeof(packet_identifier);
+            while (payload_size > 0) {
+                read_bytes = recv(socket_descriptor, receive_buffer, BUFFER_SIZE, 0);
+                fwrite(receive_buffer, 1, read_bytes, session_key_file);
+
+                payload_size -= read_bytes;
+            }
+
+            fclose(session_key_file);
+
+            session_key_exchanged = 1;
         }
         else {
             printf("[-] invalid request received\n");

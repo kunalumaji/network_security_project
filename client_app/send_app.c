@@ -1,14 +1,47 @@
 #include "main.h"
 
+
+void login_or_register() {
+
+    FILE* my_certificate = fopen("./trust_store/me.crt", "r");
+    if (my_certificate == NULL) {
+
+        char username[MAX_USERNAME_LEN+1];
+
+        printf("Create username (max %d chars): ", MAX_USERNAME_LEN);
+        fgets(username, MAX_USERNAME_LEN+1, stdin);
+        username[strlen(username)-1] = '\0';
+
+        generate_csr(username);
+
+        char ca_ip[16];
+
+        printf("Certificate Authority (CA): ");
+        fgets(ca_ip, 16, stdin);
+        ca_ip[strlen(ca_ip)-1] = '\0';
+
+        get_cert(username, ca_ip);
+
+    }
+    fclose(my_certificate);
+
+}
+
+
 void* start_application(void* arg) {
 
     const unsigned long long socket_descriptor = *(unsigned long long*)arg;
+
+    login_or_register();
 
     printf("[+] \n----\nApplication started\n----\n");
 
     while (1) {
 
-        char username[MAX_USERNAME_LEN+1]; char hostname[16];
+        char username[MAX_USERNAME_LEN+1];
+        char hostname[16];
+        unsigned char session_key[SESSION_KEY_LEN];
+
         printf("Select user to chat: ");
         fgets(username, MAX_USERNAME_LEN+1, stdin);
 
@@ -25,35 +58,56 @@ void* start_application(void* arg) {
         struct sockaddr_in user_address;
         user_address.sin_family = AF_INET;
         user_address.sin_addr.s_addr = inet_addr(hostname);
-        user_address.sin_port = htons(8585);
+        user_address.sin_port = htons(DEFAULT_USER_PORT);
 
         if (connect(socket_descriptor, (struct sockaddr*)&user_address, sizeof(user_address)) < 0) {
             printf("[-] failed to connect to the server [%s:%d]\n", inet_ntoa(user_address.sin_addr), ntohs(user_address.sin_port));
             continue;
         }
 
-        send_certificate(socket_descriptor, 1);
-        receive_certificate(socket_descriptor, 1, username);
+        char session_key_path[MAX_FILE_PATH] = "./trust_store/session_";
+        strcat(session_key_path, username);
+        strcat(session_key_path, ".txt");
 
-        char chat_file_path[MAX_FILE_PATH] = "./chats/";
-        strcat(chat_file_path, username);
-        strcat(chat_file_path, ".txt");
+        send_certificate(socket_descriptor, 1, MY_CERT_PATH);
+        receive_certificate(socket_descriptor, 1, username, session_key);
 
         char cert_file_path[MAX_FILE_PATH] = "./cache_certs/";
         strcat(cert_file_path, username);
         strcat(cert_file_path, ".crt");
-
 
         if (verify_cert(cert_file_path) <= 0) {
             printf("[-] certificate verification failed\n");
             return NULL;
         }
 
-        printf("%s\n", chat_file_path);
+        send_certificate(socket_descriptor, 3, session_key_path);
+
+        char chat_file_path[MAX_FILE_PATH] = "./chats/";
+        strcat(chat_file_path, username);
+        strcat(chat_file_path, ".txt");
+
+
+
+
+        int handshake_successful = 1;
 
         while (1) {
 
             FILE* open_chat_file = fopen(chat_file_path, "ab");
+
+            if (handshake_successful) {
+                char handshake_message[] = "\n[+] certificate handshake \n";
+
+                fwrite(handshake_message, 1, strlen(handshake_message), open_chat_file);
+                fprintf(open_chat_file, "[+] session key: ");
+                for (int index = 0; index < SESSION_KEY_LEN; index++) {
+                    fprintf(open_chat_file, "%.02x", session_key[index]);
+                }
+                fprintf(open_chat_file, "\n");
+
+                handshake_successful = 0;
+            }
 
             int packet_identifier = 2;
             printf(">>>");
@@ -69,7 +123,7 @@ void* start_application(void* arg) {
                 break;
             }
 
-            fwrite("\t\t", 1, 2, open_chat_file);
+            fwrite("\t\t\t\t", 1, 4, open_chat_file);
             fwrite(message, 1, payload_size, open_chat_file);
 
             fclose(open_chat_file);

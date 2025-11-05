@@ -185,7 +185,7 @@ void extract_username(FILE* certificate_file, char* username) {
     X509_free(certificate);
 }
 
-int send_certificate(long long socket_descriptor, int packet_identifier) {
+int send_certificate(long long socket_descriptor, int packet_identifier,char* cert_path) {
 
     int read_bytes = 0;
     char send_buffer[BUFFER_SIZE];
@@ -194,7 +194,7 @@ int send_certificate(long long socket_descriptor, int packet_identifier) {
 
     if (packet_identifier) {
 
-        FILE* my_cert = fopen("./trust_store/me.crt", "rb");
+        FILE* my_cert = fopen(cert_path, "rb");
 
         fseek(my_cert, 0, SEEK_END);
         int payload_size = ftell(my_cert);
@@ -218,7 +218,7 @@ int send_certificate(long long socket_descriptor, int packet_identifier) {
 }
 
 
-int receive_certificate(long long socket_descriptor, int packet_identifier, char* username) {
+int receive_certificate(long long socket_descriptor, int packet_identifier, char* username, unsigned char* session_key) {
 
     int read_bytes = 0;
     int payload_size;
@@ -234,9 +234,7 @@ int receive_certificate(long long socket_descriptor, int packet_identifier, char
     strcat(crt_file_path, username);
     strcat(crt_file_path, ".crt");
 
-    printf("crt_file_path: %s\n", crt_file_path);
-
-    FILE* temp_crt_file = fopen(crt_file_path, "wb");
+    FILE* temp_crt_file = fopen(crt_file_path, "wb+");
 
     fwrite(receive_buffer + 2*sizeof(packet_identifier), 1, read_bytes - 2*sizeof(packet_identifier), temp_crt_file);
 
@@ -248,15 +246,57 @@ int receive_certificate(long long socket_descriptor, int packet_identifier, char
         payload_size -= read_bytes;
     }
 
+    fseek(temp_crt_file, 0, SEEK_SET);
+    X509* cert = PEM_read_X509(temp_crt_file, NULL, NULL, NULL);
+
+    char certificate_username[MAX_USERNAME_LEN];
+
+    fseek(temp_crt_file, 0, SEEK_SET);
+    extract_username(temp_crt_file, certificate_username);
+
     fclose(temp_crt_file);
 
-    // char certificate_username[MAX_USERNAME_LEN];
-    //
-    // extract_username(temp_crt_file, certificate_username);
-    //
-    // if (strcmp(certificate_username, username) == 0) {
-    //     return 1;
-    // }
+    RAND_bytes(session_key, SESSION_KEY_LEN);
+
+    size_t encrypted_session_key_len = 0;
+    unsigned char* encrypted_session_key;
+
+    EVP_PKEY* public_key = X509_get_pubkey(cert);
+    EVP_PKEY_CTX *context = EVP_PKEY_CTX_new(public_key, NULL);
+
+    free(cert);
+
+    EVP_PKEY_encrypt_init(context);
+    EVP_PKEY_CTX_set_rsa_padding(context, RSA_PKCS1_OAEP_PADDING);
+    EVP_PKEY_encrypt(context, NULL, &encrypted_session_key_len, session_key, SESSION_KEY_LEN);
+
+    encrypted_session_key = malloc(encrypted_session_key_len);
+
+    EVP_PKEY_encrypt(context, encrypted_session_key, &encrypted_session_key_len, session_key, SESSION_KEY_LEN);
+
+    if (strcmp(certificate_username, username) == 0) {
+
+
+        char session_key_path[MAX_FILE_PATH] = "./trust_store/session_";
+        strcat(session_key_path, username);
+        strcat(session_key_path, ".txt");
+
+        time_t current_time = time(NULL);
+
+        FILE* session_key_file = fopen(session_key_path, "wb");
+        fwrite(encrypted_session_key, 1, encrypted_session_key_len, session_key_file);
+
+        fprintf(session_key_file, "\n%lld", current_time);
+        fclose(session_key_file);
+
+        free(encrypted_session_key);
+
+        return 1;
+    }
+
+    remove(crt_file_path);
+    free(encrypted_session_key);
+
     //end lock here
 
     return 0;

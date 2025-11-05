@@ -140,11 +140,6 @@ struct socket_context {
 };
 
 
-void log_to_file(const char* format, ...) {
-
-}
-
-
 void* receive_execute_send(void* arg) {
 
     const unsigned long long socket_descriptor = *(unsigned long long*)arg;
@@ -273,13 +268,13 @@ void* application(void* arg) {
 
 int main() {
 
-    char* verifying_path = "./client_app/trust_store/me.crt";
-
-    if (verify_cert(verifying_path)) {
-        printf("Verified certificate ...\n");
-    }
-    else
-        printf("Invalid certificate\n");
+    // char* verifying_path = "./client_app/trust_store/me.crt";
+    //
+    // if (verify_cert(verifying_path)) {
+    //     printf("Verified certificate ...\n");
+    // }
+    // else
+    //     printf("Invalid certificate\n");
 
     // char* ca_private_key = "./root/in/in.pem";
     // char* ca_cert = "./root/in/in.crt";
@@ -300,7 +295,7 @@ int main() {
     const unsigned long long socket_descriptor = socket(AF_INET, SOCK_STREAM, 0);
 
     if (socket_descriptor == INVALID_SOCKET) {
-        printf(" failed\n");
+        printf("socket creation failed\n");
     }
 
     struct sockaddr_in server_address;
