@@ -185,6 +185,62 @@ void extract_username(FILE* certificate_file, char* username) {
     X509_free(certificate);
 }
 
+
+int encrypt_message(char* message, int message_len, unsigned char* encrypted_message, int* encrypted_message_len, unsigned char* session_key) {
+
+    EVP_CIPHER_CTX* context = EVP_CIPHER_CTX_new();
+    if (context == NULL) {
+        printf("[-] Failed to create cipher context\n");
+        return -1;
+    }
+
+    unsigned char iv[16];
+    RAND_bytes(iv, sizeof(iv));
+
+    int enc_out_len = 0;
+
+    memcpy(encrypted_message, iv, sizeof(iv));
+    *encrypted_message_len = sizeof(iv);
+
+    EVP_EncryptInit_ex(context, EVP_aes_128_cbc(), NULL, session_key, iv);
+    EVP_EncryptUpdate(context, encrypted_message + sizeof(iv), &enc_out_len, (unsigned char*)message, message_len);
+    *encrypted_message_len += enc_out_len;
+
+    EVP_EncryptFinal_ex(context, encrypted_message + sizeof(iv) + enc_out_len, &enc_out_len);
+    *encrypted_message_len += enc_out_len;
+
+    EVP_CIPHER_CTX_free(context);
+
+    return 1;
+}
+
+
+int decrypt_message(char* encrypted_message, int encrypted_message_len, unsigned char* decrypted_message, int* decrypted_message_len, unsigned char* session_key) {
+
+    EVP_CIPHER_CTX* context = EVP_CIPHER_CTX_new();
+    if (context == NULL) {
+        printf("[-] Failed to create cipher context\n");
+        return -1;
+    }
+
+    unsigned char iv[16];
+    memcpy(iv, encrypted_message, sizeof(iv));
+
+    int dec_out_len = 0;
+
+    EVP_DecryptInit_ex(context, EVP_aes_128_cbc(), NULL, session_key, iv);
+    EVP_DecryptUpdate(context, decrypted_message, &dec_out_len, (unsigned char*)encrypted_message + sizeof(iv), encrypted_message_len - sizeof(iv));
+    *decrypted_message_len = dec_out_len;
+
+    EVP_DecryptFinal_ex(context, decrypted_message + dec_out_len, &dec_out_len);
+    *decrypted_message_len += dec_out_len;
+
+    EVP_CIPHER_CTX_free(context);
+
+    return 1;
+}
+
+
 int send_certificate(long long socket_descriptor, int packet_identifier,char* cert_path) {
 
     int read_bytes = 0;

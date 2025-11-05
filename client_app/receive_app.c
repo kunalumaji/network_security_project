@@ -16,6 +16,10 @@ void* receive_execute_send(void* arg) {
     while (1) {
 
         read_bytes = recv(socket_descriptor, receive_buffer, BUFFER_SIZE, 0);
+
+        if (read_bytes <= 0) {
+            break;
+        }
         memcpy(&packet_identifier, receive_buffer, sizeof(packet_identifier));
         memcpy(&payload_size, receive_buffer + sizeof(packet_identifier), sizeof(payload_size));
 
@@ -110,15 +114,13 @@ void* receive_execute_send(void* arg) {
                 session_key_exchanged = 0;
             }
 
-            fwrite(receive_buffer + 2*sizeof(packet_identifier), 1, read_bytes - 2*sizeof(packet_identifier), open_chat_file);
+            //message_decryption
+            unsigned char decrypted_message[BUFFER_SIZE + 16];
+            int decrypted_message_len = 0;
 
-            payload_size = payload_size - read_bytes - 2*sizeof(packet_identifier);
-            while (payload_size > 0) {
-                read_bytes = recv(socket_descriptor, receive_buffer, BUFFER_SIZE, 0);
-                fwrite(receive_buffer, 1, read_bytes, open_chat_file);
+            decrypt_message(receive_buffer + 2*sizeof(packet_identifier), read_bytes - 2*sizeof(packet_identifier), decrypted_message, &decrypted_message_len, plaintext);
 
-                payload_size -= read_bytes;
-            }
+            fwrite(decrypted_message, 1, decrypted_message_len, open_chat_file);
 
             fclose(open_chat_file);
         }

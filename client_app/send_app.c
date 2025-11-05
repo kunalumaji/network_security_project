@@ -116,7 +116,19 @@ void* start_application(void* arg) {
 
             fgets(message, BUFFER_SIZE, stdin);
 
-            int payload_size = strlen(message);
+            unsigned char encrypted_message[BUFFER_SIZE+16];
+            int payload_size;
+
+            unsigned char decrypted_message[BUFFER_SIZE+16];
+            int dec_len;
+
+            encrypt_message(message, strlen(message), encrypted_message, &payload_size, session_key);
+            decrypt_message(encrypted_message, payload_size, decrypted_message, &dec_len, session_key);
+
+            for (int i = 0; i < dec_len; i++) {
+                printf("%c", decrypted_message[i]);
+            }
+            printf("\n");
 
             if (strcmp(message, "exit\n") == 0) {
                 closesocket(socket_descriptor);
@@ -124,13 +136,13 @@ void* start_application(void* arg) {
             }
 
             fwrite("\t\t\t\t", 1, 4, open_chat_file);
-            fwrite(message, 1, payload_size, open_chat_file);
+            fwrite(message, 1, strlen(message), open_chat_file);
 
             fclose(open_chat_file);
 
             memcpy(send_buffer, &packet_identifier, sizeof(packet_identifier));
             memcpy(send_buffer + sizeof(packet_identifier), &payload_size, sizeof(payload_size));
-            memcpy(send_buffer + 2*sizeof(packet_identifier), message, payload_size); //need to be changed payload_size to read_bytes
+            memcpy(send_buffer + 2*sizeof(packet_identifier), encrypted_message, payload_size); //need to be changed payload_size to read_bytes
 
             send(socket_descriptor, send_buffer, payload_size + 2*sizeof(payload_size), 0);
 

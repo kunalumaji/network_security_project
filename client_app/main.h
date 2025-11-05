@@ -34,3 +34,6 @@ int receive_certificate(long long socket_descriptor, int packet_identifier, char
 void* start_application(void* arg);
 
 void dns_lookup(char* username, char* hostname);
+
+int encrypt_message(char* message, int message_len, unsigned char* encrypted_message, int* encrypted_message_len, unsigned char* session_key);
+int decrypt_message(char* encrypted_message, int encrypted_message_len, unsigned char* decrypted_message, int* decrypted_message_len, unsigned char* session_key);
