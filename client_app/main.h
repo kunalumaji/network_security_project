@@ -20,6 +20,8 @@
 
 #define SESSION_KEY_LEN 16
 
+#define SESSION_EXPIRY_TIME 10
+
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 
 
@@ -33,7 +35,7 @@ int receive_certificate(long long socket_descriptor, int packet_identifier, char
 
 void* start_application(void* arg);
 
-void dns_lookup(char* username, char* hostname);
+int dns_lookup(char* username, char* hostname);
 int validate_expiry(long long input_time, long long validity);
 
 

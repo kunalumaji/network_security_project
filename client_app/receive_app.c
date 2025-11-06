@@ -80,7 +80,7 @@ void* receive_execute_send(void* arg) {
             FILE* open_chat_file = fopen(chat_file_path, "ab");
 
             if (handshake_successful) {
-                fprintf(open_chat_file, "\n[+] certificate handshake\n");
+                fprintf(open_chat_file, "\n----------\n[+] certificate handshake\n");
                 handshake_successful = 0;
             }
             if (session_key_exchanged) {
@@ -88,7 +88,7 @@ void* receive_execute_send(void* arg) {
                 for (int index = 0; index < decrypted_session_key_len; index++) {
                     fprintf(open_chat_file, "%.02x", plaintext[index]);
                 }
-                fprintf(open_chat_file, "\n");
+                fprintf(open_chat_file, "\n----------\n");
                 session_key_exchanged = 0;
             }
 
@@ -98,6 +98,7 @@ void* receive_execute_send(void* arg) {
 
             decrypt_message(receive_buffer + 2*sizeof(packet_identifier), read_bytes - 2*sizeof(packet_identifier), decrypted_message, &decrypted_message_len, plaintext);
             fwrite(decrypted_message, 1, decrypted_message_len, open_chat_file);
+            fwrite("--", 1, 2, open_chat_file);
 
             fclose(open_chat_file);
         }

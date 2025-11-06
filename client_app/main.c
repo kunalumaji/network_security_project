@@ -165,19 +165,32 @@ struct socket_context {
 };
 
 
-void dns_lookup(char* username, char* hostname) {
+int dns_lookup(char *username, char *hostname) {
+    FILE *fp = fopen("./contacts.txt", "r");
 
-    char* IP = "127.0.0.1";
-    memcpy(hostname, IP, strlen(IP));
-    hostname[strlen(IP)] = '\0';
+    char line[MAX_USERNAME_LEN + 16 + 1];
+    while (fgets(line, sizeof(line), fp)) {
+        line[strcspn(line, "\n")] = '\0';
 
+        char file_user[MAX_USERNAME_LEN], file_ip[15];
+        if (sscanf(line, "%s %s", file_user, file_ip) == 2) {
+            if (strcmp(file_user, username) == 0) {
+                strcpy(hostname, file_ip);
+                fclose(fp);
+
+                return 1;
+            }
+        }
+    }
+
+    fclose(fp);
+    return 0;
 }
 
 
 int validate_expiry(long long input_time, long long validity) {
 
     time_t current_time = time(NULL);
-    printf("%lld %lld\n", input_time + validity, current_time);
     if (input_time + validity > current_time) {
         return 1;
     }
@@ -187,8 +200,6 @@ int validate_expiry(long long input_time, long long validity) {
 
 
 void extract_username(FILE* certificate_file, char* username) {
-
-    printf("Extracting username\n");
 
     X509* certificate = PEM_read_X509(certificate_file, NULL, NULL, NULL);
 
@@ -342,8 +353,6 @@ void create_session_key(unsigned char *session_key, X509 *cert, char session_key
 
     free(encrypted_session_key);
 
-    printf("Session key has been created\n");
-
 }
 
 int receive_certificate(long long socket_descriptor, int packet_identifier, char* username, unsigned char* session_key) {
@@ -405,6 +414,7 @@ int receive_certificate(long long socket_descriptor, int packet_identifier, char
 
     remove(crt_file_path);
 
+    printf("invalid certificate received\n");
     //end lock here
 
     return 0;
