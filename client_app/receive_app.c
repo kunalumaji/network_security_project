@@ -59,7 +59,7 @@ void* receive_execute_send(void* arg) {
 
         }
         else if (packet_identifier == 2) {
-            // printf("[+] message packet received\n");
+            printf("[+] message packet received\n");
 
             char chat_file_path[MAX_FILE_PATH] = "./chats/";
             strcat(chat_file_path, username);
@@ -70,32 +70,11 @@ void* receive_execute_send(void* arg) {
             strcat(session_key_path, ".txt");
 
             size_t decrypted_session_key_len = 0;
-            unsigned char encrypted_session_key[256];
             long long generated_on;
 
-            FILE* session_key_file = fopen(session_key_path, "rb");
-            fread(encrypted_session_key, 1, 256, session_key_file);
-            fseek(session_key_file, 257, SEEK_SET);
-            fscanf(session_key_file, "%lld", &generated_on);
+            unsigned char *plaintext;
+            extract_session_key(session_key_path, &decrypted_session_key_len, &generated_on, &plaintext);
 
-            FILE* secret_file = fopen("./credentials/secret.pem", "rb");
-            EVP_PKEY* private_key = PEM_read_PrivateKey(secret_file, NULL, NULL, NULL);
-
-            EVP_PKEY_CTX* context = EVP_PKEY_CTX_new(private_key, NULL);
-            EVP_PKEY_decrypt_init(context);
-            EVP_PKEY_CTX_set_rsa_padding(context, RSA_PKCS1_OAEP_PADDING);
-
-            EVP_PKEY_decrypt(context, NULL, &decrypted_session_key_len, encrypted_session_key, sizeof(encrypted_session_key));
-
-            unsigned char* plaintext = malloc(decrypted_session_key_len);
-
-            EVP_PKEY_decrypt(context, plaintext, &decrypted_session_key_len, encrypted_session_key, sizeof(encrypted_session_key));
-
-            printf("Session key ");
-            for (int index = 0; index < decrypted_session_key_len; index++) {
-                printf("%c", plaintext[index]);
-            }
-            printf(" & Generated on %lld \n", generated_on);
             //apply lock here
 
             FILE* open_chat_file = fopen(chat_file_path, "ab");
@@ -110,7 +89,6 @@ void* receive_execute_send(void* arg) {
                     fprintf(open_chat_file, "%.02x", plaintext[index]);
                 }
                 fprintf(open_chat_file, "\n");
-
                 session_key_exchanged = 0;
             }
 
@@ -119,12 +97,12 @@ void* receive_execute_send(void* arg) {
             int decrypted_message_len = 0;
 
             decrypt_message(receive_buffer + 2*sizeof(packet_identifier), read_bytes - 2*sizeof(packet_identifier), decrypted_message, &decrypted_message_len, plaintext);
-
             fwrite(decrypted_message, 1, decrypted_message_len, open_chat_file);
 
             fclose(open_chat_file);
         }
         else if (packet_identifier == 3) {
+            printf("[+] session key received\n");
 
             char session_key_path[MAX_FILE_PATH] = "./trust_store/session_";
             strcat(session_key_path, username);
@@ -175,11 +153,11 @@ void* listen_incoming_connections(void* arg) {
     }
 
     if (listen(socket_descriptor, 10) < 0) {
-        printf("[-] CA [%s]: failed to listen\n", inet_ntoa(server_address.sin_addr));
+        printf("[-] client [%s]: failed to listen\n", inet_ntoa(server_address.sin_addr));
         return NULL;
     }
 
-    printf("[+] Client [%s:%d]: listening for request...\n", inet_ntoa(server_address.sin_addr), ntohs(server_address.sin_port));
+    printf("[+] client [%s:%d]: listening for request...\n", inet_ntoa(server_address.sin_addr), ntohs(server_address.sin_port));
 
     while (1) {
 

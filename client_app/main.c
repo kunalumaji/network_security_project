@@ -173,6 +173,19 @@ void dns_lookup(char* username, char* hostname) {
 
 }
 
+
+int validate_expiry(long long input_time, long long validity) {
+
+    time_t current_time = time(NULL);
+    printf("%lld %lld\n", input_time + validity, current_time);
+    if (input_time + validity > current_time) {
+        return 1;
+    }
+    return 0;
+
+}
+
+
 void extract_username(FILE* certificate_file, char* username) {
 
     printf("Extracting username\n");
@@ -274,6 +287,65 @@ int send_certificate(long long socket_descriptor, int packet_identifier,char* ce
 }
 
 
+
+void extract_session_key(char session_key_path[256], size_t* decrypted_session_key_len, long long* generated_on, unsigned char **plaintext) {
+
+    unsigned char encrypted_session_key[256];
+
+    FILE* session_key_file = fopen(session_key_path, "rb");
+    fread(encrypted_session_key, 1, 256, session_key_file);
+    fseek(session_key_file, 257, SEEK_SET);
+    fscanf(session_key_file, "%lld", generated_on);
+
+    FILE* secret_file = fopen("./credentials/secret.pem", "rb");
+    EVP_PKEY* private_key = PEM_read_PrivateKey(secret_file, NULL, NULL, NULL);
+
+    EVP_PKEY_CTX* context = EVP_PKEY_CTX_new(private_key, NULL);
+    EVP_PKEY_decrypt_init(context);
+    EVP_PKEY_CTX_set_rsa_padding(context, RSA_PKCS1_OAEP_PADDING);
+
+    EVP_PKEY_decrypt(context, NULL, decrypted_session_key_len, encrypted_session_key, sizeof(encrypted_session_key));
+
+    *plaintext = malloc(*decrypted_session_key_len);
+
+    EVP_PKEY_decrypt(context, *plaintext, decrypted_session_key_len, encrypted_session_key, sizeof(encrypted_session_key));
+
+}
+
+
+void create_session_key(unsigned char *session_key, X509 *cert, char session_key_path[256]) {
+
+    RAND_bytes(session_key, SESSION_KEY_LEN);
+
+    size_t encrypted_session_key_len = 0;
+
+    EVP_PKEY* public_key = X509_get_pubkey(cert);
+    EVP_PKEY_CTX *context = EVP_PKEY_CTX_new(public_key, NULL);
+
+    free(cert);
+
+    EVP_PKEY_encrypt_init(context);
+    EVP_PKEY_CTX_set_rsa_padding(context, RSA_PKCS1_OAEP_PADDING);
+    EVP_PKEY_encrypt(context, NULL, &encrypted_session_key_len, session_key, SESSION_KEY_LEN);
+
+    unsigned char* encrypted_session_key = malloc(encrypted_session_key_len);
+
+    EVP_PKEY_encrypt(context, encrypted_session_key, &encrypted_session_key_len, session_key, SESSION_KEY_LEN);
+
+    time_t current_time = time(NULL);
+
+    FILE* session_key_file = fopen(session_key_path, "wb");
+    fwrite(encrypted_session_key, 1, encrypted_session_key_len, session_key_file);
+
+    fprintf(session_key_file, "\n%lld", current_time);
+    fclose(session_key_file);
+
+    free(encrypted_session_key);
+
+    printf("Session key has been created\n");
+
+}
+
 int receive_certificate(long long socket_descriptor, int packet_identifier, char* username, unsigned char* session_key) {
 
     int read_bytes = 0;
@@ -312,46 +384,26 @@ int receive_certificate(long long socket_descriptor, int packet_identifier, char
 
     fclose(temp_crt_file);
 
-    RAND_bytes(session_key, SESSION_KEY_LEN);
-
-    size_t encrypted_session_key_len = 0;
-    unsigned char* encrypted_session_key;
-
-    EVP_PKEY* public_key = X509_get_pubkey(cert);
-    EVP_PKEY_CTX *context = EVP_PKEY_CTX_new(public_key, NULL);
-
-    free(cert);
-
-    EVP_PKEY_encrypt_init(context);
-    EVP_PKEY_CTX_set_rsa_padding(context, RSA_PKCS1_OAEP_PADDING);
-    EVP_PKEY_encrypt(context, NULL, &encrypted_session_key_len, session_key, SESSION_KEY_LEN);
-
-    encrypted_session_key = malloc(encrypted_session_key_len);
-
-    EVP_PKEY_encrypt(context, encrypted_session_key, &encrypted_session_key_len, session_key, SESSION_KEY_LEN);
-
     if (strcmp(certificate_username, username) == 0) {
-
 
         char session_key_path[MAX_FILE_PATH] = "./trust_store/session_";
         strcat(session_key_path, username);
         strcat(session_key_path, ".txt");
 
-        time_t current_time = time(NULL);
+        long long generated_on;
+        size_t decrypted_session_key_len;
 
-        FILE* session_key_file = fopen(session_key_path, "wb");
-        fwrite(encrypted_session_key, 1, encrypted_session_key_len, session_key_file);
+        extract_session_key(session_key_path, &decrypted_session_key_len, &generated_on, &session_key);
+        if (validate_expiry(generated_on, 5*60) > 0) {
+            return 1;
+        }
 
-        fprintf(session_key_file, "\n%lld", current_time);
-        fclose(session_key_file);
-
-        free(encrypted_session_key);
+        create_session_key(session_key, cert, session_key_path);
 
         return 1;
     }
 
     remove(crt_file_path);
-    free(encrypted_session_key);
 
     //end lock here
 

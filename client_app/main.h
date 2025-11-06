@@ -34,6 +34,11 @@ int receive_certificate(long long socket_descriptor, int packet_identifier, char
 void* start_application(void* arg);
 
 void dns_lookup(char* username, char* hostname);
+int validate_expiry(long long input_time, long long validity);
+
 
 int encrypt_message(char* message, int message_len, unsigned char* encrypted_message, int* encrypted_message_len, unsigned char* session_key);
 int decrypt_message(char* encrypted_message, int encrypted_message_len, unsigned char* decrypted_message, int* decrypted_message_len, unsigned char* session_key);
+
+void extract_session_key(char session_key_path[256], size_t* decrypted_session_key_len, long long* generated_on, unsigned char **plaintext);
+void create_session_key(unsigned char *session_key, X509 *cert, char session_key_path[256]);
