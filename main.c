@@ -8,11 +8,18 @@
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 #include <openssl/pem.h>
+#include <dirent.h>
 
 
 #define BUFFER_SIZE 1024
+#define MAX_USERNAME_LEN 50
 #define CA_SECRET_KEY "./credentials/secret.pem"
 #define CA_CERT_PATH "./credentials/ca.crt"
+
+#define SECRET_KEY_PATH "./credentials/secret.pem"
+#define CSR_FILE_PATH "./credentials/client.csr"
+
+#define DEFAULT_CA_PORT 8888
 
 long generate_next_serial_number(void) {
 
@@ -25,6 +32,7 @@ long generate_next_serial_number(void) {
     return abs(long_serial_number);
 
 }
+
 
 int verify_cert(char* input_cert) {
 
@@ -63,7 +71,6 @@ int verify_cert(char* input_cert) {
     return 0;
 
 }
-
 
 
 int issue_cert(char* ca_private_key, char* ca_cert, char* client_csr, char* client_cert, int is_ca, long serial_number_generated) {
@@ -152,7 +159,7 @@ void* receive_execute_send(void* arg) {
     memcpy(&packet_identifier, receive_buffer, sizeof(packet_identifier));
     memcpy(&payload_size, receive_buffer + sizeof(packet_identifier), sizeof(payload_size));
 
-    if (packet_identifier == 1) {
+    if (packet_identifier == 1 || packet_identifier == 2) {
         printf("[+] request for 'issue certificate'\n");
 
         FILE* temp_csr_file = fopen("./temp_csr_file.csr", "wb");
@@ -175,8 +182,7 @@ void* receive_execute_send(void* arg) {
         char generated_file_path[100] = "./issued_certs/";
         ltoa(serial_number_generated, generated_file_path + strlen(generated_file_path), 10);
         strcat(generated_file_path, ".crt");
-
-        int ack_status = issue_cert(CA_SECRET_KEY, CA_CERT_PATH, "./temp_csr_file.csr", generated_file_path, 0, serial_number_generated);
+        int ack_status = issue_cert(CA_SECRET_KEY, CA_CERT_PATH, "./temp_csr_file.csr", generated_file_path, packet_identifier == 1 ? 0 : 1, serial_number_generated);
 
         remove("./temp_csr_file.csr");
 
@@ -266,24 +272,70 @@ void* application(void* arg) {
 }
 
 
-int main() {
+void print_username_from_cert(const char *path) {
+    FILE *certificate = fopen(path, "r");
 
-    // char* verifying_path = "./client_app/trust_store/me.crt";
-    //
-    // if (verify_cert(verifying_path)) {
-    //     printf("Verified certificate ...\n");
-    // }
-    // else
-    //     printf("Invalid certificate\n");
+    X509 *cert = PEM_read_X509(certificate, NULL, NULL, NULL);
+    fclose(certificate);
 
-    // char* ca_private_key = "./root/in/in.pem";
-    // char* ca_cert = "./root/in/in.crt";
-    // char* client_csr = "./root/in/mh/mh.csr";
-    // char* client_cert = "./root/in/mh/mh.crt";
-    //
-    // if (issue_cert(ca_private_key, ca_cert, client_csr, client_cert, 0)) {
-    //     printf("Isssued certificate ...\n");
-    // }
+    if (!cert) {
+        printf("[-] Failed to read certificate: %s\n", path);
+        return;
+    }
+
+    X509_NAME *subject = X509_get_subject_name(cert);
+    char username[50+1];
+
+    int len = X509_NAME_get_text_by_NID(subject, NID_commonName, username, sizeof(username));
+    if (len > 0)
+        printf("[+]-> %s\n", username);
+    else
+        printf("[-] %s -> Client\n", path);
+
+    X509_free(cert);
+}
+
+
+
+int generate_csr(unsigned char* common_name) {
+
+    RSA *rsa = RSA_new();
+    BIGNUM *bne = BN_new();
+    BN_set_word(bne, RSA_F4);
+    RSA_generate_key_ex(rsa, 2048, bne, NULL);
+
+    EVP_PKEY *key_holder = EVP_PKEY_new();
+    EVP_PKEY_assign_RSA(key_holder, rsa);
+
+    X509_REQ *cs_request = X509_REQ_new();
+    X509_REQ_set_version(cs_request, 1);
+
+    X509_NAME *name_block = X509_NAME_new();
+    X509_NAME_add_entry_by_txt(name_block, "CN", MBSTRING_ASC, common_name, -1,-1,0);
+    X509_REQ_set_subject_name(cs_request, name_block);
+    X509_REQ_set_pubkey(cs_request, key_holder);
+
+    if (!X509_REQ_sign(cs_request,key_holder, EVP_sha256())) {
+        printf("[-] failed to create certificate request\n");
+        return 0;
+    }
+
+    FILE* private_key_file = fopen(SECRET_KEY_PATH, "wb");
+    PEM_write_PrivateKey(private_key_file, key_holder, NULL, NULL, 0, NULL, NULL);
+    fclose(private_key_file);
+
+    FILE* cs_request_file = fopen(CSR_FILE_PATH, "wb");
+    PEM_write_X509_REQ(cs_request_file, cs_request);
+    fclose(cs_request_file);
+
+    printf("[+] certificate request file created\n");
+
+    return 1;
+
+}
+
+
+int get_cert(unsigned char* common_name, char* ca_ip) {
 
     WSADATA wsaData;
 
@@ -294,39 +346,200 @@ int main() {
 
     const unsigned long long socket_descriptor = socket(AF_INET, SOCK_STREAM, 0);
 
-    if (socket_descriptor == INVALID_SOCKET) {
-        printf("socket creation failed\n");
-    }
-
     struct sockaddr_in server_address;
     server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(8888);
-    server_address.sin_addr.s_addr = INADDR_ANY;
+    server_address.sin_addr.s_addr = inet_addr(ca_ip);
+    server_address.sin_port = htons(DEFAULT_CA_PORT);
 
-    int address_length = sizeof(server_address);
-
-    if (bind(socket_descriptor, (struct sockaddr*)&server_address, address_length) == SOCKET_ERROR) {
-        printf("[-] socket binding failed\n");
+    if (connect(socket_descriptor, (struct sockaddr*)&server_address, sizeof(server_address)) < 0) {
+        printf("[-] CA is unreachable [%s]\n", inet_ntoa(server_address.sin_addr));
+        return 0;
     }
 
-    printf("[+] socket bind successful\n");
+    char receive_buffer[BUFFER_SIZE], send_buffer[BUFFER_SIZE];
 
-    struct socket_context* context = (struct socket_context*)malloc(sizeof(struct socket_context));
-    context->socket_descriptor = socket_descriptor;
-    context->server_address = &server_address;
-    context->addrlen = &address_length;
 
-    // Listen and Application threads
-    pthread_t listening_thread_id;
-    pthread_create(&listening_thread_id, NULL, listen_connections, (void*)context);
+    if (generate_csr(common_name) <= 0) {
+        return 0;
+    }
 
-    pthread_t application_thread_id;
-    pthread_create(&application_thread_id, NULL, application, NULL);
+    FILE* csr_file = fopen(CSR_FILE_PATH, "rb");
 
-    pthread_join(listening_thread_id, NULL);
-    pthread_join(application_thread_id, NULL);
+    fseek(csr_file, 0, SEEK_END);
+    int payload_size = ftell(csr_file);
+    fseek(csr_file, 0, SEEK_SET);
 
-    closesocket(socket_descriptor);
+    char csr_buffer[BUFFER_SIZE];
+
+    int packet_identifier = 2;
+
+    int read_bytes = fread(csr_buffer, 1, BUFFER_SIZE - 2*sizeof(packet_identifier), csr_file);
+
+    memcpy(send_buffer, &packet_identifier, sizeof(packet_identifier));
+    memcpy(send_buffer + sizeof(packet_identifier), &payload_size, sizeof(payload_size));
+    memcpy(send_buffer + 2*sizeof(packet_identifier), csr_buffer, read_bytes);
+
+    send(socket_descriptor, send_buffer, read_bytes + 2*sizeof(packet_identifier), 0);
+
+    while ((read_bytes = fread(send_buffer, 1, BUFFER_SIZE, csr_file)) > 0) {
+        send(socket_descriptor, send_buffer, read_bytes, 0);
+    }
+
+    read_bytes = recv(socket_descriptor, receive_buffer, BUFFER_SIZE, 0);
+    memcpy(&packet_identifier, receive_buffer, sizeof(packet_identifier));
+    memcpy(&payload_size, receive_buffer + sizeof(packet_identifier), sizeof(payload_size));
+
+    if (packet_identifier == 0) {
+        printf("[-] certificate request declined by CA\n");
+        return 0;
+    }
+
+    FILE* certificate = fopen("./credentials/ca.crt", "wb");
+
+    fwrite(receive_buffer + 2*sizeof(packet_identifier), 1, read_bytes - 2*sizeof(packet_identifier), certificate);
+
+    payload_size -= read_bytes - 2*sizeof(packet_identifier);
+    while ((payload_size) > 0) {
+        read_bytes = recv(socket_descriptor, receive_buffer, BUFFER_SIZE, 0);
+
+        fwrite(receive_buffer, 1, read_bytes, certificate);
+        payload_size -= read_bytes;
+    }
+
+    fclose(certificate);
+
+    printf("[+] certificate issued by the CA\n");
+
+    return 1;
+
+}
+
+
+void login_or_register() {
+
+    FILE* my_certificate = fopen("./credentials/ca.crt", "r");
+    if (my_certificate == NULL) {
+
+        char username[MAX_USERNAME_LEN+1];
+
+        printf("Create CA name (max %d chars): ", MAX_USERNAME_LEN);
+        fgets(username, MAX_USERNAME_LEN+1, stdin);
+        username[strlen(username)-1] = '\0';
+
+        generate_csr(username);
+
+        char ca_ip[16];
+
+        printf("Certificate Authority (CA): ");
+        fgets(ca_ip, 16, stdin);
+        ca_ip[strlen(ca_ip)-1] = '\0';
+
+        get_cert(username, ca_ip);
+
+    }
+    fclose(my_certificate);
+
+}
+
+
+
+int main(int args, char **argv) {
+
+    char* command = argv[1];
+
+    login_or_register();
+
+    if (strcmp("list-clients", command) == 0) {
+
+        const char *dir_path = "./issued_certs";
+
+        DIR* directory = opendir(dir_path);
+
+        struct dirent *entry;
+        int total_issued_certs = 0;
+
+        printf("\nListing issued certificates\n\n");
+        while ((entry = readdir(directory)) != NULL) {
+            if (entry->d_name[0] == '.')
+                continue;
+
+            const char *ext = strrchr(entry->d_name, '.');
+            if (!ext || strcmp(ext, ".crt") != 0)
+                continue;
+
+            char fullpath[MAX_FILE_PATH];
+            snprintf(fullpath, sizeof(fullpath), "%s/%s", dir_path, entry->d_name);
+
+            print_username_from_cert(fullpath);
+            total_issued_certs++;
+        }
+
+        closedir(directory);
+
+        printf("---\nTotal issued certs: %d\n", total_issued_certs);
+
+    }
+    else if (strcmp("start-server", command) == 0) {
+        // char* verifying_path = "./client_app/trust_store/me.crt";
+        //
+        // if (verify_cert(verifying_path)) {
+        //     printf("Verified certificate ...\n");
+        // }
+        // else
+        //     printf("Invalid certificate\n");
+
+        // char* ca_private_key = "./root/private.pem";
+        // char* ca_cert = "./root/root.crt";
+        // char* client_csr = "./root/.csr";
+        // char* client_cert = "./root/in/tn/tn.crt";
+        //
+        // if (issue_cert(ca_private_key, ca_cert, client_csr, client_cert, 1, 1235647586)) {
+        //     printf("Isssued certificate ...\n");
+        // }
+
+        WSADATA wsaData;
+
+        if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
+            printf("WSAStartup failed\n");
+            return -1;
+        }
+
+        const unsigned long long socket_descriptor = socket(AF_INET, SOCK_STREAM, 0);
+
+        if (socket_descriptor == INVALID_SOCKET) {
+            printf("socket creation failed\n");
+        }
+
+        struct sockaddr_in server_address;
+        server_address.sin_family = AF_INET;
+        server_address.sin_port = htons(8888);
+        server_address.sin_addr.s_addr = INADDR_ANY;
+
+        int address_length = sizeof(server_address);
+
+        if (bind(socket_descriptor, (struct sockaddr*)&server_address, address_length) == SOCKET_ERROR) {
+            printf("[-] socket binding failed\n");
+        }
+
+        printf("[+] socket bind successful\n");
+
+        struct socket_context* context = (struct socket_context*)malloc(sizeof(struct socket_context));
+        context->socket_descriptor = socket_descriptor;
+        context->server_address = &server_address;
+        context->addrlen = &address_length;
+
+        // Listen and Application threads
+        pthread_t listening_thread_id;
+        pthread_create(&listening_thread_id, NULL, listen_connections, (void*)context);
+
+        pthread_t application_thread_id;
+        pthread_create(&application_thread_id, NULL, application, NULL);
+
+        pthread_join(listening_thread_id, NULL);
+        pthread_join(application_thread_id, NULL);
+
+        closesocket(socket_descriptor);
+    }
 
     return 0;
 }
