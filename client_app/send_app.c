@@ -86,7 +86,13 @@ void* start_application(void* arg) {
             return NULL;
         }
 
-        send_certificate(socket_descriptor, 3, session_key_path);
+        char encrypted_session_key_path[MAX_FILE_PATH] = "./trust_store/enc_session_";
+        strcat(encrypted_session_key_path, username);
+        strcat(encrypted_session_key_path, ".txt");
+
+        send_certificate(socket_descriptor, 3, encrypted_session_key_path);
+
+        remove(encrypted_session_key_path);
 
         char chat_file_path[MAX_FILE_PATH] = "./chats/";
         strcat(chat_file_path, username);
@@ -112,16 +118,19 @@ void* start_application(void* arg) {
 
             FILE* open_chat_file = fopen(chat_file_path, "ab");
 
-            size_t decrypted_session_key_len;
             long long generated_on;
 
-            extract_session_key(session_key_path, &decrypted_session_key_len, &generated_on, &session_key);
+            extract_decrypted_session_key(session_key_path, &generated_on, &session_key);
+
             if (validate_expiry(generated_on, 60*SESSION_EXPIRY_TIME) <= 0) {
+
                 FILE* certificate_temp_file = fopen(cert_file_path, "r");
                 X509* cert = PEM_read_X509(certificate_temp_file, NULL, NULL, NULL);
-                create_session_key(session_key, cert, session_key_path);
                 fclose(certificate_temp_file);
-                send_certificate(socket_descriptor, 3, session_key_path);
+
+                create_session_key(session_key, cert, encrypted_session_key_path);
+                send_certificate(socket_descriptor, 3, encrypted_session_key_path);
+                remove(encrypted_session_key_path);
 
                 fprintf(open_chat_file, "\t\t\t\t\t----------\n\t\t\t\t\t[+] session key: ");
                 for (int index = 0; index < SESSION_KEY_LEN; index++) {

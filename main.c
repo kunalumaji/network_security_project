@@ -13,6 +13,7 @@
 
 #define BUFFER_SIZE 1024
 #define MAX_USERNAME_LEN 50
+#define MAX_FILE_PATH 256
 #define CA_SECRET_KEY "./credentials/secret.pem"
 #define CA_CERT_PATH "./credentials/ca.crt"
 
@@ -20,6 +21,9 @@
 #define CSR_FILE_PATH "./credentials/client.csr"
 
 #define DEFAULT_CA_PORT 8888
+
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 
 long generate_next_serial_number(void) {
 
@@ -480,22 +484,6 @@ int main(int args, char **argv) {
 
     }
     else if (strcmp("start-server", command) == 0) {
-        // char* verifying_path = "./client_app/trust_store/me.crt";
-        //
-        // if (verify_cert(verifying_path)) {
-        //     printf("Verified certificate ...\n");
-        // }
-        // else
-        //     printf("Invalid certificate\n");
-
-        // char* ca_private_key = "./root/private.pem";
-        // char* ca_cert = "./root/root.crt";
-        // char* client_csr = "./root/.csr";
-        // char* client_cert = "./root/in/tn/tn.crt";
-        //
-        // if (issue_cert(ca_private_key, ca_cert, client_csr, client_cert, 1, 1235647586)) {
-        //     printf("Isssued certificate ...\n");
-        // }
 
         WSADATA wsaData;
 
@@ -528,15 +516,10 @@ int main(int args, char **argv) {
         context->server_address = &server_address;
         context->addrlen = &address_length;
 
-        // Listen and Application threads
         pthread_t listening_thread_id;
         pthread_create(&listening_thread_id, NULL, listen_connections, (void*)context);
 
-        pthread_t application_thread_id;
-        pthread_create(&application_thread_id, NULL, application, NULL);
-
         pthread_join(listening_thread_id, NULL);
-        pthread_join(application_thread_id, NULL);
 
         closesocket(socket_descriptor);
     }

@@ -298,8 +298,19 @@ int send_certificate(long long socket_descriptor, int packet_identifier,char* ce
 }
 
 
+void extract_decrypted_session_key(char session_key_path[MAX_FILE_PATH], long long* generated_on, unsigned char **plaintext) {
 
-void extract_session_key(char session_key_path[256], size_t* decrypted_session_key_len, long long* generated_on, unsigned char **plaintext) {
+    FILE* session_key_file = fopen(session_key_path, "rb");
+    fread(*plaintext, 1, SESSION_KEY_LEN, session_key_file);
+    fseek(session_key_file, SESSION_KEY_LEN+1, SEEK_SET);
+    fscanf(session_key_file, "%lld", generated_on);
+
+    fclose(session_key_file);
+
+}
+
+
+void extract_encrypted_session_key(char session_key_path[256], size_t* decrypted_session_key_len, long long* generated_on, unsigned char **plaintext) {
 
     unsigned char encrypted_session_key[256];
 
@@ -326,6 +337,9 @@ void extract_session_key(char session_key_path[256], size_t* decrypted_session_k
 
 void create_session_key(unsigned char *session_key, X509 *cert, char session_key_path[256]) {
 
+    char decrypted_session_key_path[256] = "enc_";
+    strcat(decrypted_session_key_path, session_key_path);
+
     RAND_bytes(session_key, SESSION_KEY_LEN);
 
     size_t encrypted_session_key_len = 0;
@@ -350,6 +364,11 @@ void create_session_key(unsigned char *session_key, X509 *cert, char session_key
 
     fprintf(session_key_file, "\n%lld", current_time);
     fclose(session_key_file);
+
+    FILE* decrypted_session_key_file = fopen(decrypted_session_key_path, "wb");
+    fwrite(session_key, 1, SESSION_KEY_LEN, decrypted_session_key_file);
+    fprintf(decrypted_session_key_file, "\n%lld", current_time);
+    fclose(decrypted_session_key_file);
 
     free(encrypted_session_key);
 
@@ -400,14 +419,17 @@ int receive_certificate(long long socket_descriptor, int packet_identifier, char
         strcat(session_key_path, ".txt");
 
         long long generated_on;
-        size_t decrypted_session_key_len;
 
-        extract_session_key(session_key_path, &decrypted_session_key_len, &generated_on, &session_key);
+        extract_decrypted_session_key(session_key_path, &generated_on, &session_key);
         if (validate_expiry(generated_on, 5*60) > 0) {
             return 1;
         }
 
-        create_session_key(session_key, cert, session_key_path);
+        char encrypted_session_key_path[MAX_FILE_PATH] = "./trust_store/enc_session_";
+        strcat(session_key_path, username);
+        strcat(session_key_path, ".txt");
+
+        create_session_key(session_key, cert, encrypted_session_key_path);
 
         return 1;
     }

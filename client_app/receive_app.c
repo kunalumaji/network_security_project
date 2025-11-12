@@ -73,7 +73,7 @@ void* receive_execute_send(void* arg) {
             long long generated_on;
 
             unsigned char *plaintext;
-            extract_session_key(session_key_path, &decrypted_session_key_len, &generated_on, &plaintext);
+            extract_decrypted_session_key(session_key_path, &generated_on, &plaintext);
 
             //apply lock here
 
@@ -105,11 +105,11 @@ void* receive_execute_send(void* arg) {
         else if (packet_identifier == 3) {
             printf("[+] session key received\n");
 
-            char session_key_path[MAX_FILE_PATH] = "./trust_store/session_";
-            strcat(session_key_path, username);
-            strcat(session_key_path, ".txt");
+            char encrypted_session_key_path[MAX_FILE_PATH] = "./trust_store/enc_session_";
+            strcat(encrypted_session_key_path, username);
+            strcat(encrypted_session_key_path, ".txt");
 
-            FILE* session_key_file = fopen(session_key_path, "wb");
+            FILE* session_key_file = fopen(encrypted_session_key_path, "wb");
 
             fwrite(receive_buffer + 2*sizeof(packet_identifier), 1, read_bytes - 2*sizeof(packet_identifier), session_key_file);
 
@@ -122,6 +122,24 @@ void* receive_execute_send(void* arg) {
             }
 
             fclose(session_key_file);
+
+            size_t decrypted_session_key_len = 0;
+            long long generated_on;
+
+            unsigned char *plaintext;
+            extract_encrypted_session_key(encrypted_session_key_path, &decrypted_session_key_len, &generated_on, &plaintext);
+
+            char session_key_path[MAX_FILE_PATH] = "./trust_store/session_";
+            strcat(encrypted_session_key_path, username);
+            strcat(encrypted_session_key_path, ".txt");
+
+            session_key_file = fopen(session_key_path, "wb");
+
+            fwrite(plaintext, 1, decrypted_session_key_len, session_key_file);
+            fprintf(session_key_file, "\n");
+            fprintf(session_key_file, "%lld", generated_on);
+
+            remove("./trust_store/enc_session_");
 
             session_key_exchanged = 1;
         }
