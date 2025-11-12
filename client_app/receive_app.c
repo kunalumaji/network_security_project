@@ -1,3 +1,5 @@
+#include <io.h>
+
 #include "main.h"
 
 
@@ -69,12 +71,18 @@ void* receive_execute_send(void* arg) {
             strcat(session_key_path, username);
             strcat(session_key_path, ".txt");
 
-            size_t decrypted_session_key_len = 0;
+            printf("%s\n", session_key_path);
+
+            size_t decrypted_session_key_len = SESSION_KEY_LEN;
             long long generated_on;
 
-            unsigned char *plaintext;
+            unsigned char *plaintext = malloc(SESSION_KEY_LEN);
             extract_decrypted_session_key(session_key_path, &generated_on, &plaintext);
 
+            for (int index = 0; index < SESSION_KEY_LEN; index++) {
+                printf("%.02x", plaintext[index]);
+            }
+            printf("\n");
             //apply lock here
 
             FILE* open_chat_file = fopen(chat_file_path, "ab");
@@ -129,17 +137,24 @@ void* receive_execute_send(void* arg) {
             unsigned char *plaintext;
             extract_encrypted_session_key(encrypted_session_key_path, &decrypted_session_key_len, &generated_on, &plaintext);
 
+            for (int index = 0; index < decrypted_session_key_len; index++) {
+                printf("%.02x", plaintext[index]);
+            }
+            printf("\n");
+
             char session_key_path[MAX_FILE_PATH] = "./trust_store/session_";
-            strcat(encrypted_session_key_path, username);
-            strcat(encrypted_session_key_path, ".txt");
+            strcat(session_key_path, username);
+            strcat(session_key_path, ".txt");
 
-            session_key_file = fopen(session_key_path, "wb");
+            FILE* de_session_key_file = fopen(session_key_path, "wb");
 
-            fwrite(plaintext, 1, decrypted_session_key_len, session_key_file);
-            fprintf(session_key_file, "\n");
-            fprintf(session_key_file, "%lld", generated_on);
+            fwrite(plaintext, 1, decrypted_session_key_len, de_session_key_file);
+            fprintf(de_session_key_file, "\n");
+            fprintf(de_session_key_file, "%lld", generated_on);
 
-            remove("./trust_store/enc_session_");
+            fclose(de_session_key_file);
+
+            remove(encrypted_session_key_path);
 
             session_key_exchanged = 1;
         }

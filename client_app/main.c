@@ -300,13 +300,20 @@ int send_certificate(long long socket_descriptor, int packet_identifier,char* ce
 
 void extract_decrypted_session_key(char session_key_path[MAX_FILE_PATH], long long* generated_on, unsigned char **plaintext) {
 
+    printf("Inside here...\n");
+
     FILE* session_key_file = fopen(session_key_path, "rb");
+    if (session_key_file == NULL) {
+        printf("[-] Failed to open session key file\n");
+    }
+
     fread(*plaintext, 1, SESSION_KEY_LEN, session_key_file);
     fseek(session_key_file, SESSION_KEY_LEN+1, SEEK_SET);
     fscanf(session_key_file, "%lld", generated_on);
 
     fclose(session_key_file);
 
+    printf("[+] session key read from file\n");
 }
 
 
@@ -335,10 +342,7 @@ void extract_encrypted_session_key(char session_key_path[256], size_t* decrypted
 }
 
 
-void create_session_key(unsigned char *session_key, X509 *cert, char session_key_path[256]) {
-
-    char decrypted_session_key_path[256] = "enc_";
-    strcat(decrypted_session_key_path, session_key_path);
+void create_session_key(unsigned char *session_key, X509 *cert, char session_key_path[MAX_FILE_PATH], char decrypted_session_key_path[MAX_FILE_PATH]) {
 
     RAND_bytes(session_key, SESSION_KEY_LEN);
 
@@ -429,7 +433,7 @@ int receive_certificate(long long socket_descriptor, int packet_identifier, char
         strcat(session_key_path, username);
         strcat(session_key_path, ".txt");
 
-        create_session_key(session_key, cert, encrypted_session_key_path);
+        create_session_key(session_key, cert, encrypted_session_key_path, session_key_path);
 
         return 1;
     }

@@ -128,7 +128,7 @@ void* start_application(void* arg) {
                 X509* cert = PEM_read_X509(certificate_temp_file, NULL, NULL, NULL);
                 fclose(certificate_temp_file);
 
-                create_session_key(session_key, cert, encrypted_session_key_path);
+                create_session_key(session_key, cert, encrypted_session_key_path, session_key_path);
                 send_certificate(socket_descriptor, 3, encrypted_session_key_path);
                 remove(encrypted_session_key_path);
 
