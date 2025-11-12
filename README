@@ -1,0 +1,43 @@
+** Hierarchical Certificate Authority (CA) **
+
+The following application is implementation of Certificate Authority (CA) server. The server is responsible for issuing X509 Certificates based on CSRs and keeping track of issued certificates.
+
+Requirements:
+
+-C Compiler (GCC)
+-openssl library**
+-make utility
+-windows machine
+
+Steps:
+
+1. Extract the submission into seperate directory.
+2. Compile the C file using following command:
+
+    gcc -I 'path to openssl library \include' main.c -o ca_server -lcrypto -lssl -lws2_32
+
+-----------------OR-------------------
+
+2. Use MAKEFILE to prepare the executables. Run 'make' command in the root directory of the submission.
+
+3. After successful compilation, 'ca_server.exe' executable is crated on root dir of project. you can start the server to listen for connections by:
+
+    ./ca_server start-server
+
+   It will start listening to the CSRs request if server is already authorized to do so else it will request higher level authority by sending CSR request to get authorized.
+
+   NOTE: To register as CA you must have IP address of the higher level CA to request CA certificate.
+
+4. To check for already issued certificate by the CA, run the following command:
+
+    ./ca_server list-clients
+
+    It will show all the usernames whose CSR request is signed by the CA and issued a certificate.
+
+***Above implementation is build using 'Winsock' library. So both 'ca_server' must be on windows machine to proceed.
+
+
+Thank you :)
+Kunal
+CS25S020
+

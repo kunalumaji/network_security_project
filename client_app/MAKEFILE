@@ -1,0 +1,25 @@
+# === Makefile for Server/Client ===
+
+CC = gcc
+CFLAGS = -I "C:\Program Files\openssl-3.5.2\openssl-3.5.2\include"
+LIBS = -lws2_32 -lssl -lcrypto
+
+CLIENT_SRC_SND = send_app.c main.c
+CLIENT_SRC_RCV = receive_app.c main.c
+
+CLIENT_TARGET_SEND = send
+CLIENT_TARGET_RECEIVE = receive
+
+all: $(CLIENT_TARGET_SEND) $(CLIENT_TARGET_RECEIVE)
+
+$(CLIENT_TARGET_SEND): $(CLIENT_SRC_SND)
+	$(CC) $(CFLAGS) $(CLIENT_SRC_SND) -o $(CLIENT_TARGET_SEND) $(LIBS)
+
+$(CLIENT_TARGET_RECEIVE): $(CLIENT_SRC_RCV)
+	$(CC) $(CFLAGS) $(CLIENT_SRC_RCV) -o $(CLIENT_TARGET_RECEIVE) $(LIBS)
+
+run-client-s: $(CLIENT_TARGET_SEND)
+	$(CLIENT_TARGET_SEND)
+
+run-client-r: $(CLIENT_TARGET_RECEIVE)
+	$(CLIENT_TARGET_RECEIVE)

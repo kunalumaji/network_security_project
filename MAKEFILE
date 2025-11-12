@@ -1,0 +1,18 @@
+# === Makefile for Server/Client ===
+
+CC = gcc
+CFLAGS = -I "C:\Program Files\openssl-3.5.2\openssl-3.5.2\include"
+LIBS = -lws2_32 -lssl -lcrypto
+
+SERVER_SRC = main.c
+
+SERVER_TARGET = ca_server
+
+all: $(SERVER_TARGET)
+
+$(SERVER_TARGET): $(SERVER_SRC)
+	$(CC) $(CFLAGS) $(SERVER_SRC) -o $(SERVER_TARGET) $(LIBS)
+
+run-ca-server: $(SERVER_TARGET)
+	./$(SERVER_TARGET) start-server
+

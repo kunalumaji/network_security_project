@@ -1,0 +1,52 @@
+** Client Application **
+
+The following application is implementation of Client side of Hierarchical certificate based key distribution authority of secure communication. It client offers functionality like Mutual authentication, chat with peers, session key generation,etc.
+It is composed of two main applications for bidirectional communication -- Sending app, receiving app. Refer the following instructions to start messaging with other peers in network.
+
+Requirements:
+
+-C Compiler (GCC)
+-openssl library**
+-make utility
+-windows machine
+
+--It requires two windows machines to test the functionality. Install the client on both the machines and execute commands as per given instructions.
+
+Steps:
+
+1. Extract the submission into seperate directory.
+2. Compile the C file using following command:
+
+    gcc -I 'path to openssl library \include' send_app.c main.c -o send -lcrypto -lssl -lws2_32
+    gcc -I 'path to openssl library \include' receive_app.c main.c -o receive -lcrypto -lssl -lws2_32
+
+-----------------OR-------------------
+
+2. Use MAKEFILE to prepare the executables. Run 'make' command in the root directory of the submission.
+
+3. Registration: Every new user required to get X509 verified certificate from the CA which is used to mutually authenticate during the communication.
+    -Run the sending application by './send' and it will prompt for choosing a unique username.
+    -A CSR is generated and you will be asked to select the CA for requesting the certificate (Enter the known CA IPaddr to initiate a certificate request)
+    -After successful verification of CSR a certificate will get issued by CA which can be found in './trust_store'.
+
+    Now you are ready to chat with your active peers in your network.
+
+3. After successful compilation, 'send.exe' & 'receive.exe' executable is crated on client app dir of project. you can start the server to listen for connections by:
+
+    ./receiver
+    (above is used to listen for messages sent by your peers)
+
+    ./send
+    (you can send messages to active users searching their username)
+
+4. "./send" will ask you to enter the username of the client to chat with. A handshake of certificates will be performed if user is active with valid certificate in your network.
+
+5. Generated session keys are stored in trusted store dir of the project which are used to encrypt the data sent during the communication. Keys are auto-refreshed every 'x' min. x is defined as SESSION_EXPIRY_TIME  macro in main.h header file.
+
+***Above implementation is build using 'Winsock' library. So both 'ca_server' must be on windows machine to proceed.
+
+
+Thank you :)
+Kunal
+CS25S020
+
