@@ -231,6 +231,9 @@ void extract_username(FILE* certificate_file, char* username) {
 
 int encrypt_message(char* message, int message_len, unsigned char* encrypted_message, int* encrypted_message_len, unsigned char* session_key) {
 
+    struct timespec encyption_start_time, encyption_end_time;
+    clock_gettime(CLOCK_MONOTONIC, &encyption_start_time);
+
     EVP_CIPHER_CTX* context = EVP_CIPHER_CTX_new();
     if (context == NULL) {
         printf("[-] Failed to create cipher context\n");
@@ -254,11 +257,17 @@ int encrypt_message(char* message, int message_len, unsigned char* encrypted_mes
 
     EVP_CIPHER_CTX_free(context);
 
+    clock_gettime(CLOCK_MONOTONIC, &encyption_end_time);
+    printf("-\nTime for data encryption: %f\n-\n", get_time_difference(encyption_start_time, encyption_end_time));
+
     return 1;
 }
 
 
 int decrypt_message(char* encrypted_message, int encrypted_message_len, unsigned char* decrypted_message, int* decrypted_message_len, unsigned char* session_key) {
+
+    struct timespec decryption_start_time, decryption_end_time;
+    clock_gettime(CLOCK_MONOTONIC, &decryption_start_time);
 
     EVP_CIPHER_CTX* context = EVP_CIPHER_CTX_new();
     if (context == NULL) {
@@ -279,6 +288,9 @@ int decrypt_message(char* encrypted_message, int encrypted_message_len, unsigned
     *decrypted_message_len += dec_out_len;
 
     EVP_CIPHER_CTX_free(context);
+
+    clock_gettime(CLOCK_MONOTONIC, &decryption_end_time);
+    printf("-\nTime for data decryption: %f\n-\n", get_time_difference(decryption_start_time, decryption_end_time));
 
     return 1;
 }
@@ -318,8 +330,6 @@ int send_certificate(long long socket_descriptor, int packet_identifier,char* ce
 
 
 void extract_decrypted_session_key(char session_key_path[MAX_FILE_PATH], long long* generated_on, unsigned char **plaintext) {
-
-    printf("Inside here...\n");
 
     FILE* session_key_file = fopen(session_key_path, "rb");
     if (session_key_file == NULL) {
@@ -363,6 +373,9 @@ void extract_encrypted_session_key(char session_key_path[256], size_t* decrypted
 
 void create_session_key(unsigned char *session_key, X509 *cert, char session_key_path[MAX_FILE_PATH], char decrypted_session_key_path[MAX_FILE_PATH]) {
 
+    struct timespec session_start_time, session_end_time;
+    clock_gettime(CLOCK_MONOTONIC, &session_start_time);
+
     RAND_bytes(session_key, SESSION_KEY_LEN);
 
     size_t encrypted_session_key_len = 0;
@@ -394,6 +407,10 @@ void create_session_key(unsigned char *session_key, X509 *cert, char session_key
     fclose(decrypted_session_key_file);
 
     free(encrypted_session_key);
+
+    clock_gettime(CLOCK_MONOTONIC, &session_end_time);
+
+    printf("-\n Time for session key generation/renewal + RSA encrypt: %f\n-\n", get_time_difference(session_start_time,session_end_time));
 
 }
 
@@ -443,14 +460,19 @@ int receive_certificate(long long socket_descriptor, int packet_identifier, char
 
         long long generated_on;
 
-        extract_decrypted_session_key(session_key_path, &generated_on, &session_key);
-        if (validate_expiry(generated_on, 5*60) > 0) {
-            return 1;
-        }
+        // FILE* sesson_check = fopen(session_key_path, "rb");
+        // if (sesson_check != NULL) {
+        //     fclose(sesson_check);
+        //     extract_decrypted_session_key(session_key_path, &generated_on, &session_key);
+        //     if (validate_expiry(generated_on, 5*60) > 0) {
+        //         return 1;
+        //     }
+        // }
+        // fclose(sesson_check);
 
         char encrypted_session_key_path[MAX_FILE_PATH] = "./trust_store/enc_session_";
-        strcat(session_key_path, username);
-        strcat(session_key_path, ".txt");
+        strcat(encrypted_session_key_path, username);
+        strcat(encrypted_session_key_path, ".txt");
 
         create_session_key(session_key, cert, encrypted_session_key_path, session_key_path);
 

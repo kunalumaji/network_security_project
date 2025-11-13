@@ -417,7 +417,11 @@ int get_cert(unsigned char* common_name, char* ca_ip) {
     return 1;
 
 }
-
+double get_time_difference(struct timespec start, struct timespec end) {
+    double start_ms = (double)start.tv_sec * 1000.0 + (double)start.tv_nsec / 1000000.0;
+    double end_ms   = (double)end.tv_sec   * 1000.0 + (double)end.tv_nsec   / 1000000.0;
+    return end_ms - start_ms;
+}
 
 void login_or_register() {
 
@@ -438,8 +442,13 @@ void login_or_register() {
         fgets(ca_ip, 16, stdin);
         ca_ip[strlen(ca_ip)-1] = '\0';
 
-        get_cert(username, ca_ip);
+        struct timespec ca_registration_start_time, ca_registration_end_time;
 
+        clock_gettime(CLOCK_MONOTONIC, &ca_registration_start_time);
+        get_cert(username, ca_ip);
+        clock_gettime(CLOCK_MONOTONIC, &ca_registration_end_time);
+
+        printf("-\nTIme for CA Registration: %f\n-\n", get_time_difference(ca_registration_start_time, ca_registration_end_time));
     }
     fclose(my_certificate);
 
