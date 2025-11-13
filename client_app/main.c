@@ -164,6 +164,19 @@ struct socket_context {
     int *addrlen;
 };
 
+int add_user(char* username, char* hostname) {
+    FILE *contacts = fopen("./contacts.txt", "ab");
+    if (contacts == NULL) {
+        printf("[-] failed to open contact file\n");
+        return 0;
+    }
+
+    fprintf(contacts, "\n%s %s", username, hostname);
+    fclose(contacts);
+
+    return 1;
+}
+
 
 int dns_lookup(char *username, char *hostname) {
     FILE *fp = fopen("./contacts.txt", "r");

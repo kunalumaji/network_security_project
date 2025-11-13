@@ -106,7 +106,7 @@ void* receive_execute_send(void* arg) {
 
             decrypt_message(receive_buffer + 2*sizeof(packet_identifier), read_bytes - 2*sizeof(packet_identifier), decrypted_message, &decrypted_message_len, plaintext);
             fwrite(decrypted_message, 1, decrypted_message_len, open_chat_file);
-            fwrite("--", 1, 2, open_chat_file);
+            fwrite("--\n", 1, 2, open_chat_file);
 
             fclose(open_chat_file);
         }
@@ -136,11 +136,6 @@ void* receive_execute_send(void* arg) {
 
             unsigned char *plaintext;
             extract_encrypted_session_key(encrypted_session_key_path, &decrypted_session_key_len, &generated_on, &plaintext);
-
-            for (int index = 0; index < decrypted_session_key_len; index++) {
-                printf("%.02x", plaintext[index]);
-            }
-            printf("\n");
 
             char session_key_path[MAX_FILE_PATH] = "./trust_store/session_";
             strcat(session_key_path, username);

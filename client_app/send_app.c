@@ -38,14 +38,20 @@ void* start_application(void* arg) {
 
         const unsigned long long socket_descriptor = socket(AF_INET, SOCK_STREAM, 0);
 
-        char username[MAX_USERNAME_LEN+1];
+        char username[MAX_USERNAME_LEN+1] = {"\0"};
         char hostname[16] = {'\0'};
         unsigned char* session_key = malloc(SESSION_KEY_LEN);
 
         printf("Select user to chat: ");
         fgets(username, MAX_USERNAME_LEN+1, stdin);
 
+
         username[strlen(username)-1] = '\0';
+
+        if (strlen(username) == 0) {
+            printf("[-] username is invalid\n");
+            continue;
+        }
 
         if (strcmp(username, "exit") == 0) {
             closesocket(socket_descriptor);
@@ -53,7 +59,17 @@ void* start_application(void* arg) {
         }
 
 
-        dns_lookup(username, hostname);
+        if (dns_lookup(username, hostname) <= 0) {
+            printf("[-] user not found in contact list\n");
+            printf("\nContact IP (%s): ", username);
+
+            fgets(hostname, 16+1, stdin);
+            hostname[strlen(hostname)-1] = '\0';
+
+            add_user(username, hostname);
+        }
+
+        printf("\n[+] connecting to %s@%s\n", username, hostname);
 
         struct sockaddr_in user_address;
         user_address.sin_family = AF_INET;

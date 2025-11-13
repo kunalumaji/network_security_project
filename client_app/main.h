@@ -36,6 +36,7 @@ int receive_certificate(long long socket_descriptor, int packet_identifier, char
 void* start_application(void* arg);
 
 int dns_lookup(char* username, char* hostname);
+int add_user(char* username, char* hostname);
 int validate_expiry(long long input_time, long long validity);
 
 
