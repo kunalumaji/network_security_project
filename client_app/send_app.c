@@ -29,8 +29,13 @@ void login_or_register() {
 
 void* start_application(void* arg) {
 
+    struct timespec registration_start_time, registration_end_time;
 
+    clock_gettime(CLOCK_MONOTONIC, &registration_start_time);
     login_or_register();
+    clock_gettime(CLOCK_MONOTONIC, &registration_end_time);
+
+    printf("-\nTime for Registration: %f\n-\n", get_time_difference(registration_start_time, registration_end_time));
 
     printf("[+] \n----\nApplication started\n----\n");
 
@@ -85,6 +90,9 @@ void* start_application(void* arg) {
         strcat(session_key_path, username);
         strcat(session_key_path, ".txt");
 
+        struct timespec handshake_start_time, handshake_end_time;
+
+        clock_gettime(CLOCK_MONOTONIC, &handshake_start_time);
         send_certificate(socket_descriptor, 1, MY_CERT_PATH);
         int receive_status = receive_certificate(socket_descriptor, 1, username, session_key);
 
@@ -97,16 +105,26 @@ void* start_application(void* arg) {
         strcat(cert_file_path, username);
         strcat(cert_file_path, ".crt");
 
+        struct timespec cert_verify_start_time, cert_verify_end_time;
+
+        clock_gettime(CLOCK_MONOTONIC, &cert_verify_start_time);
         if (verify_cert(cert_file_path) <= 0) {
             printf("[-] certificate verification failed\n");
             return NULL;
         }
+        clock_gettime(CLOCK_MONOTONIC, &cert_verify_end_time);
+
+        printf("-\nTime for certificate verification: %f\n-\n", get_time_difference(cert_verify_start_time, cert_verify_end_time));
 
         char encrypted_session_key_path[MAX_FILE_PATH] = "./trust_store/enc_session_";
         strcat(encrypted_session_key_path, username);
         strcat(encrypted_session_key_path, ".txt");
 
         send_certificate(socket_descriptor, 3, encrypted_session_key_path);
+        clock_gettime(CLOCK_MONOTONIC, &handshake_end_time);
+
+        printf("-\nTime for handshake: %f\n-\n", get_time_difference(handshake_start_time, handshake_end_time));
+
 
         remove(encrypted_session_key_path);
 

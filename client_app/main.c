@@ -177,6 +177,12 @@ int add_user(char* username, char* hostname) {
     return 1;
 }
 
+double get_time_difference(struct timespec start, struct timespec end) {
+    double start_ms = (double)start.tv_sec * 1000.0 + (double)start.tv_nsec / 1000000.0;
+    double end_ms   = (double)end.tv_sec   * 1000.0 + (double)end.tv_nsec   / 1000000.0;
+    return end_ms - start_ms;
+}
+
 
 int dns_lookup(char *username, char *hostname) {
     FILE *fp = fopen("./contacts.txt", "r");
