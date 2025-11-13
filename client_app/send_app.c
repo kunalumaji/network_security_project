@@ -162,8 +162,15 @@ void* start_application(void* arg) {
                 X509* cert = PEM_read_X509(certificate_temp_file, NULL, NULL, NULL);
                 fclose(certificate_temp_file);
 
+                struct timespec session_renew_start_time, session_renew_end_time;
+
+                clock_gettime(CLOCK_MONOTONIC, &session_renew_start_time);
                 create_session_key(session_key, cert, encrypted_session_key_path, session_key_path);
                 send_certificate(socket_descriptor, 3, encrypted_session_key_path);
+                clock_gettime(CLOCK_MONOTONIC, &session_renew_end_time);
+
+                printf("-\nTime for session renewal: %f\n-\n", get_time_difference(session_renew_start_time, session_renew_end_time));
+
                 remove(encrypted_session_key_path);
 
                 fprintf(open_chat_file, "\t\t\t\t\t----------\n\t\t\t\t\t[+] session key: ");
